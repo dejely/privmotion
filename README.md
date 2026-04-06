@@ -19,6 +19,7 @@ This is a Python prototype, not an official OpenCV module.
 - Benchmarks utility/privacy proxy metrics.
 - Renders anonymized GIF or MP4 previews.
 - Runs simple manifest-based dataset evaluations.
+- Includes an OpenCV-contrib-style C++ module scaffold for future integration.
 
 ## Install
 
@@ -200,6 +201,19 @@ PYTHONPATH=src python -m privmotion.cli.visualize --help
 PYTHONPATH=src python -m privmotion.cli.benchmark --help
 PYTHONPATH=src python -m privmotion.cli.dataset_eval --help
 ```
+
+## OpenCV-Style Scaffold
+
+The runnable implementation is Python, but Phase 4 adds an OpenCV-contrib-style
+module scaffold under:
+
+```text
+modules/privmotion/
+```
+
+It contains CMake, public headers, C++ stubs, sample code, source-level tests,
+and module documentation. It is intended as a future integration shape and is
+not yet a compiled production OpenCV module.
 
 ## Limitations
 
