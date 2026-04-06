@@ -12,6 +12,7 @@ build/
 dist/
 *.egg-info/
 *.pt
+README.local.md
 
 out/
 outputs/
