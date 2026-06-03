@@ -1,0 +1,1 @@
+{"samples": [{"id": "demo_mp4", "input": "../examples/demo_person.mp4", "label": "demo", "expected_frames": 3}]}
