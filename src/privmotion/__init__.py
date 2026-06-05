@@ -6,6 +6,7 @@ from privmotion.validation import RetentionValidationResult, validate_output_dir
 from privmotion.benchmark import BenchmarkReport, benchmark_output_dir
 from privmotion.visualization import VisualizationResult, visualize_output_dir
 from privmotion.dataset_eval import DatasetEvaluationReport, evaluate_dataset_manifest
+from privmotion.recovery import RecoveryInspectionResult, inspect_recovery_policy
 
 __all__ = [
     "BenchmarkReport",
@@ -14,10 +15,12 @@ __all__ = [
     "ProcessConfig",
     "ProcessResult",
     "RetentionValidationResult",
+    "RecoveryInspectionResult",
     "VisualizationResult",
     "benchmark_output_dir",
     "evaluate_dataset_manifest",
     "parse_output_modes",
+    "inspect_recovery_policy",
     "validate_output_dir",
     "visualize_output_dir",
 ]

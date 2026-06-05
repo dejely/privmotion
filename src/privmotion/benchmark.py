@@ -53,6 +53,9 @@ def benchmark_output_dir(output_dir: Path, report_path: Path | None = None) -> B
 
     skeleton_records = _records_from(skeletons)
     feature_records = _records_from(features)
+    encrypted_feature_count = _encrypted_record_count(features)
+    feature_record_count = encrypted_feature_count if encrypted_feature_count is not None else len(feature_records)
+    features_encrypted = encrypted_feature_count is not None
     processed_frames = _input_summary_value(metadata, "readable_frames")
     skipped_frames = _input_summary_value(metadata, "skipped_frames")
 
@@ -83,11 +86,21 @@ def benchmark_output_dir(output_dir: Path, report_path: Path | None = None) -> B
         "average_silhouette_foreground_ratio": silhouette_stats["foreground_ratio"],
         "depth_surrogate_count": surrogate_stats["count"],
         "depth_surrogate_frame_coverage": _safe_ratio(surrogate_stats["count"], processed_frames),
-        "feature_record_count": len(feature_records) if features is not None else None,
-        "feature_frame_coverage": _safe_ratio(len(feature_records), processed_frames)
+        "feature_record_count": feature_record_count if features is not None else None,
+        "encrypted_feature_record_count": encrypted_feature_count,
+        "feature_frame_coverage": _safe_ratio(feature_record_count, processed_frames)
         if features is not None
         else None,
     }
+
+    residual_risk_notes = [
+        "Deterministic Phase 3 metrics are proxies, not face-recognition, re-identification, or gait-model scores.",
+        "Skeletons, silhouettes, and depth surrogates can still leak identity through body shape and motion.",
+    ]
+    if features_encrypted:
+        residual_risk_notes.append(
+            "Encrypted feature payloads are counted but not decrypted or analyzed by benchmark reports."
+        )
 
     privacy = {
         "raw_rgb_retention_passed": retention_result.get("passed"),
@@ -98,12 +111,9 @@ def benchmark_output_dir(output_dir: Path, report_path: Path | None = None) -> B
             surrogate_stats,
         ),
         "feature_uniqueness_proxy": _feature_uniqueness_proxy(feature_records)
-        if features is not None
+        if features is not None and not features_encrypted
         else None,
-        "residual_risk_notes": [
-            "Deterministic Phase 3 metrics are proxies, not face-recognition, re-identification, or gait-model scores.",
-            "Skeletons, silhouettes, and depth surrogates can still leak identity through body shape and motion.",
-        ],
+        "residual_risk_notes": residual_risk_notes,
     }
 
     systems = {
@@ -115,6 +125,7 @@ def benchmark_output_dir(output_dir: Path, report_path: Path | None = None) -> B
             "metadata": True,
             "skeletons": skeletons is not None,
             "features": features is not None,
+            "encrypted_features": features_encrypted,
             "retention_report": retention is not None,
             "silhouettes": silhouette_stats["count"] > 0,
             "depth_surrogates": surrogate_stats["count"] > 0,
@@ -154,6 +165,15 @@ def _records_from(payload: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not isinstance(records, list):
         return []
     return [record for record in records if isinstance(record, dict)]
+
+
+def _encrypted_record_count(payload: dict[str, Any] | None) -> int | None:
+    if payload is None:
+        return None
+    encrypted_records = payload.get("encrypted_records")
+    if isinstance(encrypted_records, list):
+        return len(encrypted_records)
+    return None
 
 
 def _input_summary_value(metadata: dict[str, Any], key: str) -> int:
@@ -275,4 +295,3 @@ def _safe_ratio(numerator: int, denominator: int) -> float | None:
     if denominator <= 0:
         return None
     return round(numerator / denominator, 6)
-

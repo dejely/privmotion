@@ -16,6 +16,7 @@ from privmotion.backends import (
 from privmotion.config import ProcessConfig
 from privmotion.exporters import depth_surrogate_from_frame, write_json, write_pgm
 from privmotion.io import load_frames
+from privmotion.recovery import encrypt_feature_records, plaintext_feature_metadata
 from privmotion.validation import validate_output_dir
 
 
@@ -46,6 +47,7 @@ class PrivMotionPipeline:
 
         skeleton_records: list[dict[str, object]] = []
         feature_records: list[dict[str, object]] = []
+        feature_encryption_metadata = plaintext_feature_metadata()
         previous_keypoints: tuple[Keypoint, ...] | None = None
 
         for frame in frames:
@@ -103,14 +105,28 @@ class PrivMotionPipeline:
                 },
             )
         if "features" in self.config.output_modes:
-            write_json(
-                self.config.output_dir / "features.json",
-                {
-                    "schema": "privmotion.features.v0",
-                    "encryption": "not-implemented-phase-2",
-                    "records": feature_records,
-                },
-            )
+            if self.config.feature_encryption == "fernet":
+                if self.config.access_policy_path is None:
+                    raise ValueError("fernet feature encryption requires an access policy JSON file")
+                encryption_result = encrypt_feature_records(
+                    feature_records,
+                    output_dir=self.config.output_dir,
+                    access_policy_path=self.config.access_policy_path,
+                    recovery_key_env=self.config.recovery_key_env,
+                    audit_actor=self.config.audit_actor,
+                    audit_purpose=self.config.audit_purpose or "",
+                )
+                feature_encryption_metadata = encryption_result.metadata
+                write_json(self.config.output_dir / "features.json", encryption_result.features_payload)
+            else:
+                write_json(
+                    self.config.output_dir / "features.json",
+                    {
+                        "schema": "privmotion.features.v0",
+                        "encryption": feature_encryption_metadata,
+                        "records": feature_records,
+                    },
+                )
 
         metadata = {
             "schema": "privmotion.metadata.v0",
@@ -130,6 +146,7 @@ class PrivMotionPipeline:
                 "policy": self.config.retention_policy,
                 "raw_rgb_written": False,
             },
+            "feature_encryption": feature_encryption_metadata,
             "limitations": self._limitations(),
         }
         metadata_path = self.config.output_dir / "metadata.json"
