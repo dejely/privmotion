@@ -3,7 +3,8 @@
 This threat model covers the current `privmotion` repository as a local Python
 CLI/library prototype plus an OpenCV-contrib-style scaffold. It is based on the
 current repo structure and should be revisited if the tool becomes a hosted
-service, accepts remote uploads, or adds reversible/encrypted access controls.
+service, accepts remote uploads, or expands reversible/encrypted access
+controls beyond feature records.
 
 ## Executive Summary
 
@@ -50,8 +51,8 @@ Open questions that would change risk ranking:
 - Will `privmotion` be wrapped by a web service or notebook shared with
   untrusted users?
 - Will outputs be stored in shared cloud buckets or published as demo assets?
-- Will future reversible access controls store encrypted raw or recoverable
-  identity-bearing data?
+- Will future reversible access controls store encrypted raw data, decrypt
+  feature records, or recover broader identity-bearing data?
 
 Evidence anchors:
 
@@ -167,7 +168,7 @@ flowchart LR
 | Asset | Why it matters | Security objective (C/I/A) |
 | --- | --- | --- |
 | Raw RGB input frames | Directly identify people, locations, and context. | C |
-| Skeletons and features | Can leak gait, body proportions, and motion identity. | C/I |
+| Skeletons and features | Can leak gait, body proportions, and motion identity; encrypted features reduce casual exposure only when enabled. | C/I |
 | Silhouettes and depth surrogates | Can leak body shape, posture, and carried objects. | C |
 | Metadata and reports | Can leak local paths, sample IDs, labels, backend choices, and dataset composition. | C/I |
 | Output directories | Hold privacy-sensitive derived data and previews. | C/I |
@@ -265,7 +266,7 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | TM-001 | Malicious media provider | Operator processes untrusted or oversized media. | Provide huge or malformed image/video/frame input that is decoded and held in memory. | Resource exhaustion or decoder-triggered crash; possible dependency-level exploit. | Compute resources, local process, raw frames. | Extension allow-list and skipped unreadable frames in `src/privmotion/io.py`; optional `max_frames` in `ProcessConfig`. | Frames are loaded into a list before processing; dataset eval does not expose `max_frames`; no file size, pixel count, duration, or timeout limits. | Stream frames incrementally; add max bytes, max pixels, max duration, and dataset max-sample limits; expose `--max-frames` in dataset eval; document processing untrusted media in a sandbox. | Log input summary, skipped frames, decode errors, frame count, byte size, processing time, and memory warnings. | medium | high | high |
 | TM-002 | Untrusted model source | Operator enables YOLO or auto downloads/loads model weights. | Supply malicious or compromised model file/name. | Local code execution risk through unsafe model loading or integrity compromise of pose outputs. | Local filesystem, model weights, output integrity. | YOLO is optional and explicit install is documented; `yolo` fails if dependency missing in `src/privmotion/backends.py`. | No allow-list, hash pinning, model provenance check, or warning when model path is local/untrusted. | Add trusted model allow-list and hash verification; warn for local model paths; document only using trusted weights; consider disabling YOLO auto-download in high-assurance mode. | Record model path/hash/source in metadata; alert when unknown model paths are used. | medium | high | high |
-| TM-003 | Output recipient or downstream analyst | Outputs are shared publicly or with broad access. | Re-identify subjects from skeletons, silhouettes, depth surrogates, features, previews, or metadata. | Privacy harm despite no raw RGB retention. | Skeletons, features, masks, previews, metadata. | README and `PRIVACY_MODEL.md` warn that derived artifacts can leak identity; raw RGB not written in `pipeline.py`. | No formal privacy metric, differential privacy, encryption, access control, or automatic metadata redaction. | Add metadata redaction options; add artifact sensitivity labels; require explicit acknowledgement before writing previews to `assets/`; provide aggregate-only report mode. | Review `retention_report.json`; scan outputs for paths/labels; add report fields for artifact sensitivity and metadata leakage. | high | high | high |
+| TM-003 | Output recipient or downstream analyst | Outputs are shared publicly or with broad access. | Re-identify subjects from skeletons, silhouettes, depth surrogates, plaintext features, previews, or metadata. | Privacy harm despite no raw RGB retention. | Skeletons, features, masks, previews, metadata. | README and `PRIVACY_MODEL.md` warn that derived artifacts can leak identity; raw RGB not written in `pipeline.py`; Phase 5 can encrypt feature records only. | No formal privacy metric, differential privacy, complete access control, decrypted recovery workflow, or automatic metadata redaction. | Add metadata redaction options; add artifact sensitivity labels; require explicit acknowledgement before writing previews to `assets/`; provide aggregate-only report mode; keep encrypted features enabled for sensitive feature exports. | Review `retention_report.json`; inspect encrypted-feature policy with `privmotion-recovery-inspect`; scan outputs for paths/labels; add report fields for artifact sensitivity and metadata leakage. | high | high | high |
 | TM-004 | Wrapper service or future code change | A wrapper writes raw frames or near-raw frames into output directories. | Store raw RGB with names not caught by validator. | False sense of privacy compliance and raw identity leakage. | Raw RGB frames, output directory, validation reports. | `validate_output_dir` scans raw-like names and disallows raw images outside allowed dirs. | Heuristic name-based validation can miss raw data; allowed image dirs are trusted by name. | Add content-based checks for RGB images; enforce writer registry; keep output schema allow-list; add tests that fail on raw-looking data in unexpected paths. | Include validator version and scanned file counts; add CI tests for retention bypass cases. | medium | high | high |
 | TM-005 | Malicious manifest author | Operator runs dataset eval on attacker-controlled manifest. | Reference many files, sensitive paths, or identifying labels; trigger batch output creation. | DoS, metadata leakage, accidental processing of non-consented data. | Local paths, dataset metadata, generated outputs, compute resources. | Manifest must be JSON object/list; sample ID is sanitized in `dataset_eval.py`. | Input path is resolved relative to manifest and not restricted to a dataset root; no sample count or total frame limits. | Add `--dataset-root` and reject paths outside it; add max samples and max frames; redact absolute paths from reports by default. | Log resolved path roots, sample counts, rejected paths, and per-sample frame counts. | medium | medium | medium |
 | TM-006 | Local user or misleading instructions | Operator chooses unsafe output/report/preview paths. | Write generated files into sensitive or unintended directories. | File overwrite, data exposure, repository pollution, or confusion. | Output files, local filesystem, repo hygiene. | Exporters create parent dirs and write explicit paths; `.gitignore` ignores common generated dirs and weights. | No output root sandbox, symlink handling, overwrite confirmation, or same-path checks. | Refuse output inside source input directories by default; add `--force` for overwrites; warn for paths outside repo or under `assets/`; protect against symlinked outputs if needed. | Emit output path, file count, and overwrite warnings in metadata and CLI logs. | medium | medium | medium |
@@ -277,8 +278,8 @@ flowchart LR
   - A hosted wrapper allows remote users to process uploaded media and reach
     local files or execute model code.
   - A default path stores raw RGB frames despite `no-raw-rgb`.
-  - Reversible recovery is added without encryption, access policy, and audit
-    logging.
+  - Raw RGB recovery or decrypted record export is added without access policy
+    and audit logging.
 
 - High:
   - Untrusted YOLO weights are loaded without provenance controls.

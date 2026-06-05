@@ -45,6 +45,12 @@ store:
 - `skeletons.json`: frame indices, timestamps, track IDs, keypoints,
   confidence values, bounding boxes, centroids, and simple motion fields.
 - `features.json`: machine-readable kinematic feature records.
+- `features.json` with `encrypted_records`: opt-in Fernet-encrypted kinematic
+  feature records when Phase 5 feature encryption is enabled.
+- `access_policy.json`: normalized access policy copied for encrypted-feature
+  runs.
+- `audit_log.jsonl`: append-only JSONL audit events for encrypted-feature runs
+  and recovery-policy inspection.
 - `retention_report.json`: validation results for the configured retention
   policy.
 - `benchmark_report.json`: deterministic utility, privacy-proxy, and systems
@@ -121,6 +127,8 @@ The current prototype provides:
   retention violations in an output directory.
 - **Proxy privacy reporting**: `privmotion-benchmark` reports deterministic
   local proxy metrics such as raw-retention status and artifact availability.
+- **Opt-in encrypted feature records**: Phase 5 can encrypt kinematic feature
+  records with Fernet authenticated encryption, an access policy, and audit log.
 
 This is best understood as **privacy risk reduction**, not guaranteed
 anonymization.
@@ -136,15 +144,18 @@ anonymization.
 - Legal compliance with privacy, biometric, workplace, education, medical, or
   surveillance regulations.
 - Consent management or subject-rights handling.
-- Secure storage, encryption, access control, audit logging, or key management.
+- Complete secure storage, access control, or key management. Phase 5 provides
+  opt-in encrypted feature records and audit metadata only.
 - That downstream tools will not reconstruct or infer identity.
 - That model-backed pose output is accurate.
 - That validation can detect raw data saved outside the selected output
   directory.
 - That generated previews are safe to publish.
+- Decryption or recovery export from the CLI.
+- Raw RGB recovery.
 
-Optional reversible access controls and encrypted recovery are future design
-topics, not part of the default privacy model.
+Optional encrypted feature controls are available only when explicitly enabled.
+They do not change the default `no-raw-rgb` privacy model.
 
 ## Recommended Operating Practices
 
@@ -167,6 +178,7 @@ The default policy is:
 retention = no-raw-rgb
 ```
 
-Any future option that stores raw RGB or enables reversible recovery should be
-explicit, documented as unsafe or restricted, covered by tests, and paired with
-access policy, audit logging, and consent-oriented validation.
+Any future option that stores raw RGB, decrypts records, or enables broader
+reversible recovery should be explicit, documented as unsafe or restricted,
+covered by tests, and paired with stronger access policy, audit logging, and
+consent-oriented validation.
