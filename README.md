@@ -206,7 +206,7 @@ Important metadata fields:
 
 ## Encrypted Feature Controls
 
-Phase 5 adds opt-in encrypted **feature records only**. It does not make raw RGB,
+opt-in encrypted **feature records only**. It does not make raw RGB,
 skeletons, silhouettes, depth surrogates, or previews recoverable.
 
 Generate a Fernet key:
