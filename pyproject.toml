@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 dependencies = [
+  "cryptography>=43",
   "numpy>=1.24",
   "Pillow>=10",
   "imageio[ffmpeg]>=2.37",
@@ -30,6 +31,7 @@ privmotion-validate = "privmotion.cli.validate:main"
 privmotion-benchmark = "privmotion.cli.benchmark:main"
 privmotion-visualize = "privmotion.cli.visualize:main"
 privmotion-dataset-eval = "privmotion.cli.dataset_eval:main"
+privmotion-recovery-inspect = "privmotion.cli.recovery_inspect:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

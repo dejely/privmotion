@@ -24,6 +24,8 @@ processing and is not written to outputs by default.
 - [Quick Start](#quick-start)
 - [Key Capabilities](#key-capabilities)
 - [Output Artifacts](#output-artifacts)
+- [Encrypted Feature Controls](#encrypted-feature-controls)
+- [Privacy and Security Docs](#privacy-and-security-docs)
 - [Architecture](#architecture)
 - [Dataset Evaluation](#dataset-evaluation)
 - [OpenCV-Style Scaffold](#opencv-style-scaffold)
@@ -156,6 +158,9 @@ PYTHONPATH=src python -m privmotion.cli.benchmark \
   not copied into the output directory.
 - **Anonymized motion export**: skeletons, masks, depth surrogates, and feature
   records are saved as machine-readable artifacts.
+- **Opt-in encrypted features**: Phase 5 can encrypt kinematic feature records
+  with a Fernet key, access policy, and audit log while keeping raw RGB
+  unrecoverable by default.
 - **YOLO-first pose path**: `auto` uses YOLO-Pose when available and records any
   fallback reason in `metadata.json`.
 - **Person-constrained silhouettes**: YOLO person detections can constrain mask
@@ -178,6 +183,8 @@ out/video_run/
   metadata.json
   skeletons.json
   features.json
+  access_policy.json
+  audit_log.jsonl
   retention_report.json
   benchmark_report.json
   preview.mp4
@@ -193,7 +200,78 @@ Important metadata fields:
 | `backends.pose` | Backend actually used for pose extraction. |
 | `backends.pose_model` | Selected pose model when YOLO is used. |
 | `backends.pose_fallback_reason` | Reason `auto` fell back, if it did. |
+| `feature_encryption.mode` | `none` by default, or `fernet` for encrypted feature records. |
+| `feature_encryption.policy_id` | Access policy ID when encrypted features are enabled. |
 | `retention.raw_rgb_written` | Should remain `false` for default runs. |
+
+## Encrypted Feature Controls
+
+opt-in encrypted **feature records only**. It does not make raw RGB,
+skeletons, silhouettes, depth surrogates, or previews recoverable.
+
+Generate a Fernet key:
+
+```bash
+python - <<'PY'
+from cryptography.fernet import Fernet
+print(Fernet.generate_key().decode("ascii"))
+PY
+```
+
+Export the key before processing:
+
+```bash
+export PRIVMOTION_RECOVERY_KEY="<generated-fernet-key>"
+```
+
+Create an access policy JSON, for example:
+
+```json
+{
+  "policy_id": "demo-policy",
+  "allowed_purposes": ["research-review"],
+  "requires_audit": true
+}
+```
+
+Process with encrypted feature records:
+
+```bash
+PYTHONPATH=src python -m privmotion.cli.process \
+  --input examples/videoplayback.mp4 \
+  --output out/video_encrypted \
+  --mode skeleton,silhouette,depth-surrogate,features \
+  --feature-encryption fernet \
+  --access-policy policies/demo-policy.json \
+  --audit-actor local-operator \
+  --audit-purpose research-review
+```
+
+Inspect encrypted recovery-policy metadata without decrypting records:
+
+```bash
+PYTHONPATH=src python -m privmotion.cli.recovery_inspect \
+  --output out/video_encrypted \
+  --audit-actor reviewer \
+  --audit-purpose policy-check
+```
+
+Encrypted runs write `features.json` with `encrypted_records`,
+`access_policy.json`, and `audit_log.jsonl`. There is no decryption CLI in this
+phase.
+
+## Privacy and Security Docs
+
+Use these documents when evaluating whether `privmotion` is appropriate for a
+dataset, demo, research workflow, or regulated environment:
+
+- [PRIVACY_MODEL.md](PRIVACY_MODEL.md): explains what enters the system, what is
+  stored or discarded, what privacy level the tool provides, and what it does
+  not guarantee.
+- [DATA_RETENTION.md](DATA_RETENTION.md): defines the `no-raw-rgb` retention
+  policy, generated artifact lifecycle, deletion guidance, and demo media rules.
+- [THREAT_MODEL.md](THREAT_MODEL.md): documents assets, trust boundaries, abuse
+  paths, risks, and mitigations for the current CLI/library prototype.
 
 ## Architecture
 
@@ -299,6 +377,7 @@ PYTHONPATH=src python -m privmotion.cli.validate --help
 PYTHONPATH=src python -m privmotion.cli.visualize --help
 PYTHONPATH=src python -m privmotion.cli.benchmark --help
 PYTHONPATH=src python -m privmotion.cli.dataset_eval --help
+PYTHONPATH=src python -m privmotion.cli.recovery_inspect --help
 ```
 
 Local generated files are ignored through `.gitignore`, including `out/`,
@@ -320,7 +399,8 @@ Current limitations:
   real pose model.
 - Benchmarks are local deterministic proxies, not full face recognition,
   person re-identification, gait leakage, or reconstruction-risk evaluations.
-- Reversible access controls and encrypted recovery are not implemented.
+- Phase 5 encrypts feature records only; it does not recover raw RGB or decrypt
+  records from the CLI.
 - Raw RGB is not saved by default, but users still need consent-oriented data
   policies when processing real people.
 

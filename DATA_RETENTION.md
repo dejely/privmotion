@@ -64,6 +64,8 @@ benchmarking, or demonstration:
 - `retention_report.json`
 - `benchmark_report.json`
 - `dataset_report.json`
+- `access_policy.json`
+- `audit_log.jsonl`
 - `silhouettes/*.pgm`
 - `depth_surrogates/*.pgm`
 - anonymized `preview.gif` or `preview.mp4`
@@ -158,19 +160,21 @@ rm -rf out outputs privmotion-output
 Before deleting, make sure no needed benchmark report, anonymized demo, or
 experiment result is stored only in that directory.
 
-## Future Restricted Retention
+## Restricted Retention Controls
 
-Reversible recovery, encrypted storage, access policy enforcement, and audit
-logging are not part of the current default implementation.
+Phase 5 implements opt-in encrypted kinematic feature records only. It writes
+`features.json` with `encrypted_records`, `access_policy.json`, and
+`audit_log.jsonl` when `--feature-encryption fernet` is selected.
 
-Any future feature that stores raw RGB, recoverable identity-bearing data, or
-encrypted reversible records should require:
+The default implementation still does not store raw RGB and does not provide a
+decryption CLI. Any future feature that stores raw RGB, decrypts records, or
+adds broader recoverable identity-bearing data should require:
 
 - Explicit opt-in configuration.
 - Clear unsafe/restricted labeling.
-- Encryption and key-management design.
-- Access-control policy.
-- Audit logging.
+- Encryption and key-management design beyond environment-variable demo keys.
+- Access-control policy enforcement.
+- Audit logging for every recovery attempt.
 - Consent-oriented validation.
 - Tests proving the default path remains `no-raw-rgb`.
 
