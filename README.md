@@ -5,7 +5,8 @@ Privacy-preserving motion analytics for videos, RGB-D streams, and frame folders
 > [!NOTE]
 > `privmotion` is a runnable research prototype and OpenCV-contrib-style module
 > scaffold. It is not an official OpenCV module, and it is not a production
-> privacy guarantee.
+> privacy guarantee. Its HIPAA-oriented mode supports expert review; it does
+> not certify HIPAA de-identification by itself.
 
 `privmotion` transforms identity-bearing visual input into anonymized kinematic
 artifacts: skeletons, silhouettes, depth-like surrogates, feature records,
@@ -25,6 +26,7 @@ processing and is not written to outputs by default.
 - [Key Capabilities](#key-capabilities)
 - [Output Artifacts](#output-artifacts)
 - [Encrypted Feature Controls](#encrypted-feature-controls)
+- [HIPAA Expert-Ready Aggregate Mode](#hipaa-expert-ready-aggregate-mode)
 - [Privacy and Security Docs](#privacy-and-security-docs)
 - [Architecture](#architecture)
 - [Dataset Evaluation](#dataset-evaluation)
@@ -161,6 +163,9 @@ PYTHONPATH=src python -m privmotion.cli.benchmark \
 - **Opt-in encrypted features**: Phase 5 can encrypt kinematic feature records
   with a Fernet key, access policy, and audit log while keeping raw RGB
   unrecoverable by default.
+- **Expert-ready aggregate mode**: a HIPAA-oriented profile writes aggregate
+  reports only and requires qualified Expert Determination review before any
+  de-identification claim.
 - **YOLO-first pose path**: `auto` uses YOLO-Pose when available and records any
   fallback reason in `metadata.json`.
 - **Person-constrained silhouettes**: YOLO person detections can constrain mask
@@ -202,6 +207,7 @@ Important metadata fields:
 | `backends.pose_fallback_reason` | Reason `auto` fell back, if it did. |
 | `feature_encryption.mode` | `none` by default, or `fernet` for encrypted feature records. |
 | `feature_encryption.policy_id` | Access policy ID when encrypted features are enabled. |
+| `deidentification_profile` | `standard` by default, or `hipaa-expert-aggregate` for aggregate expert-review outputs. |
 | `retention.raw_rgb_written` | Should remain `false` for default runs. |
 
 ## Encrypted Feature Controls
@@ -260,6 +266,49 @@ Encrypted runs write `features.json` with `encrypted_records`,
 `access_policy.json`, and `audit_log.jsonl`. There is no decryption CLI in this
 phase.
 
+## HIPAA Expert-Ready Aggregate Mode
+
+HIPAA de-identification under the Privacy Rule requires either Expert
+Determination or Safe Harbor. The `hipaa-expert-aggregate` profile is designed
+to support the Expert Determination route described by HHS; it does not make an
+automatic legal or compliance claim.
+
+Run aggregate-only processing:
+
+```bash
+PYTHONPATH=src python -m privmotion.cli.process \
+  --input examples/videoplayback.mp4 \
+  --output out/hipaa_aggregate \
+  --deidentification-profile hipaa-expert-aggregate \
+  --mode aggregate
+```
+
+Validate the aggregate output:
+
+```bash
+PYTHONPATH=src python -m privmotion.cli.validate \
+  --output out/hipaa_aggregate \
+  --deidentification-profile hipaa-expert-aggregate
+```
+
+HIPAA aggregate runs write only:
+
+```text
+out/hipaa_aggregate/
+  metadata.json
+  aggregate_report.json
+  deidentification_report.json
+  retention_report.json
+```
+
+This mode does not write skeletons, features, silhouettes, depth surrogates,
+previews, frame PNGs, exact frame timestamps, source filenames, paths, track
+IDs, boxes, centroids, keypoints, or velocities. `privmotion-visualize` and
+`privmotion-benchmark` reject these outputs because rendering or benchmark
+reports would create path, timestamp, or person-level artifacts.
+
+HHS guidance: <https://www.hhs.gov/hipaa/for-professionals/privacy/special-topics/de-identification/>.
+
 ## Privacy and Security Docs
 
 Use these documents when evaluating whether `privmotion` is appropriate for a
@@ -291,6 +340,7 @@ appearance suppression
         +--> silhouette export
         +--> depth surrogate export
         +--> feature records
+        +--> aggregate-only expert-review report
         |
         v
 retention validation + benchmark reports + anonymized preview
@@ -337,6 +387,10 @@ out/dataset_eval/dataset_report.json
 The current evaluator uses deterministic local proxy metrics. ORPose-Depth,
 Market-1501-style re-identification datasets, and consented custom video remain
 future dataset integrations.
+
+For HIPAA-oriented aggregate evaluation, use `--mode aggregate` and
+`--deidentification-profile hipaa-expert-aggregate`. This writes aggregate
+dataset metrics only and rejects `--visualize`.
 
 ## OpenCV-Style Scaffold
 
@@ -401,6 +455,9 @@ Current limitations:
   person re-identification, gait leakage, or reconstruction-risk evaluations.
 - Phase 5 encrypts feature records only; it does not recover raw RGB or decrypt
   records from the CLI.
+- The HIPAA aggregate profile is for Expert Determination support only. A
+  qualified expert still has to determine and document that re-identification
+  risk is very small for the expected recipient and context.
 - Raw RGB is not saved by default, but users still need consent-oriented data
   policies when processing real people.
 

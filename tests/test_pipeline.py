@@ -50,6 +50,65 @@ def test_pipeline_processes_synthetic_image_without_raw_rgb(tmp_path) -> None:
     assert validation.passed
 
 
+def test_pipeline_hipaa_aggregate_writes_only_redacted_reports(tmp_path) -> None:
+    input_path = tmp_path / "person.ppm"
+    output_dir = tmp_path / "out"
+    write_ppm(input_path, synthetic_person_image())
+
+    PrivMotionPipeline(
+        ProcessConfig(
+            input_path=input_path,
+            output_dir=output_dir,
+            output_modes=("aggregate",),
+            pose_backend="prototype",
+            deidentification_profile="hipaa-expert-aggregate",
+        )
+    ).run()
+
+    assert sorted(path.name for path in output_dir.iterdir()) == [
+        "aggregate_report.json",
+        "deidentification_report.json",
+        "metadata.json",
+        "retention_report.json",
+    ]
+    assert not (output_dir / "skeletons.json").exists()
+    assert not (output_dir / "features.json").exists()
+    assert not (output_dir / "silhouettes").exists()
+    assert not (output_dir / "depth_surrogates").exists()
+
+    metadata_text = (output_dir / "metadata.json").read_text(encoding="utf-8")
+    aggregate_text = (output_dir / "aggregate_report.json").read_text(encoding="utf-8")
+    deidentification = json.loads((output_dir / "deidentification_report.json").read_text(encoding="utf-8"))
+    metadata = json.loads(metadata_text)
+    aggregate = json.loads(aggregate_text)
+
+    forbidden = (
+        "input_path",
+        "output_dir",
+        "access_policy_path",
+        "source_name",
+        "track_id",
+        "timestamp_ms",
+        "bbox_xywh",
+        "centroid_xy",
+        "keypoints",
+        "keypoint_velocity",
+        "created_unix",
+    )
+    for token in forbidden:
+        assert token not in metadata_text
+        assert token not in aggregate_text
+    assert metadata["deidentification_profile"] == "hipaa-expert-aggregate"
+    assert metadata["retention"]["person_level_artifacts_written"] is False
+    assert aggregate["utility"]["processed_frame_count"] == 1
+    assert aggregate["retention"]["person_level_artifacts_written"] is False
+    assert deidentification["expert_determination_status"] == "required"
+    assert deidentification["hipaa_deidentification_claim"] is False
+
+    validation = validate_output_dir(output_dir, deidentification_profile="hipaa-expert-aggregate")
+    assert validation.passed
+
+
 def test_skeleton_json_contains_required_fields(tmp_path) -> None:
     input_path = tmp_path / "person.ppm"
     output_dir = tmp_path / "out"

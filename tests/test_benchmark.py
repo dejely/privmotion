@@ -89,6 +89,24 @@ def test_benchmark_handles_missing_optional_outputs(tmp_path) -> None:
     assert report.systems["available_artifacts"]["features"] is False
 
 
+def test_benchmark_rejects_hipaa_aggregate_output(tmp_path) -> None:
+    input_path = tmp_path / "person.ppm"
+    output_dir = tmp_path / "hipaa"
+    write_ppm(input_path, synthetic_person_image())
+    PrivMotionPipeline(
+        ProcessConfig(
+            input_path=input_path,
+            output_dir=output_dir,
+            output_modes=("aggregate",),
+            pose_backend="prototype",
+            deidentification_profile="hipaa-expert-aggregate",
+        )
+    ).run()
+
+    with pytest.raises(ValueError, match="aggregate_report"):
+        benchmark_output_dir(output_dir)
+
+
 def test_benchmark_privacy_metric_detects_non_mask_visual_output(tmp_path) -> None:
     output_dir = build_processed_output(tmp_path)
     write_json(output_dir / "metadata-copy.json", {})

@@ -47,6 +47,8 @@ def benchmark_output_dir(output_dir: Path, report_path: Path | None = None) -> B
         raise FileNotFoundError(f"required metadata.json is missing from: {path}")
 
     metadata = _read_json(metadata_path)
+    if _deidentification_profile(metadata) == "hipaa-expert-aggregate":
+        raise ValueError("hipaa-expert-aggregate outputs use aggregate_report.json and do not support benchmark reports")
     skeletons = _read_optional_json(path / "skeletons.json")
     features = _read_optional_json(path / "features.json")
     retention = _read_optional_json(path / "retention_report.json")
@@ -156,6 +158,16 @@ def _read_optional_json(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
     return _read_json(path)
+
+
+def _deidentification_profile(metadata: dict[str, Any]) -> str:
+    profile = metadata.get("deidentification_profile")
+    if isinstance(profile, str):
+        return profile
+    config = metadata.get("config", {})
+    if isinstance(config, dict) and isinstance(config.get("deidentification_profile"), str):
+        return str(config["deidentification_profile"])
+    return "standard"
 
 
 def _records_from(payload: dict[str, Any] | None) -> list[dict[str, Any]]:

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from privmotion.cli.dataset_eval import main as dataset_eval_main
 from privmotion.dataset_eval import evaluate_dataset_manifest
@@ -79,3 +80,74 @@ def test_dataset_eval_cli_writes_report(tmp_path) -> None:
     payload = json.loads((tmp_path / "eval" / "dataset_report.json").read_text(encoding="utf-8"))
     assert payload["schema"] == "privmotion.dataset_eval.v0"
     assert payload["sample_count"] == 1
+
+
+def test_evaluate_dataset_manifest_hipaa_aggregate_writes_redacted_report(tmp_path) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    write_ppm(data_dir / "patient_named_file.ppm", synthetic_person_image())
+    manifest = tmp_path / "dataset.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "samples": [
+                    {
+                        "id": "patient-001",
+                        "input": "data/patient_named_file.ppm",
+                        "label": "walk",
+                        "split": "test",
+                        "expected_frames": 1,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = evaluate_dataset_manifest(
+        manifest,
+        tmp_path / "eval",
+        output_modes=("aggregate",),
+        pose_backend="prototype",
+        deidentification_profile="hipaa-expert-aggregate",
+    )
+
+    payload_text = (tmp_path / "eval" / "dataset_report.json").read_text(encoding="utf-8")
+    payload = json.loads(payload_text)
+    assert report.sample_count == 1
+    assert report.processed_frame_count == 1
+    assert payload["deidentification_profile"] == "hipaa-expert-aggregate"
+    assert payload["sample_count"] == 1
+    assert "samples" not in payload
+    forbidden = (
+        "patient-001",
+        "patient_named_file",
+        "manifest_path",
+        "output_dir",
+        "label",
+        "split",
+        "expected_frames",
+        "visualization",
+    )
+    for token in forbidden:
+        assert token not in payload_text
+    assert (tmp_path / "eval" / "sample_0000" / "aggregate_report.json").exists()
+    assert not (tmp_path / "eval" / "patient-001").exists()
+
+
+def test_evaluate_dataset_manifest_hipaa_aggregate_rejects_visualization(tmp_path) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    write_ppm(data_dir / "a.ppm", synthetic_person_image())
+    manifest = tmp_path / "dataset.json"
+    manifest.write_text(json.dumps([{"id": "sample-a", "input": "data/a.ppm"}]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="visualization"):
+        evaluate_dataset_manifest(
+            manifest,
+            tmp_path / "eval",
+            output_modes=("aggregate",),
+            pose_backend="prototype",
+            visualize=True,
+            deidentification_profile="hipaa-expert-aggregate",
+        )

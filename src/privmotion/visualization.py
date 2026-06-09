@@ -68,6 +68,8 @@ def visualize_output_dir(
         raise FileNotFoundError(f"required metadata.json is missing from: {output_path}")
 
     metadata = _read_json(metadata_path)
+    if _deidentification_profile(metadata) == "hipaa-expert-aggregate":
+        raise ValueError("hipaa-expert-aggregate outputs do not support visualization")
     skeletons = _read_optional_json(output_path / "skeletons.json")
     retention = _read_optional_json(output_path / "retention_report.json")
     skeleton_by_frame = _skeletons_by_frame(skeletons)
@@ -209,6 +211,16 @@ def _read_optional_json(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
     return _read_json(path)
+
+
+def _deidentification_profile(metadata: dict[str, Any]) -> str:
+    profile = metadata.get("deidentification_profile")
+    if isinstance(profile, str):
+        return profile
+    config = metadata.get("config", {})
+    if isinstance(config, dict) and isinstance(config.get("deidentification_profile"), str):
+        return str(config["deidentification_profile"])
+    return "standard"
 
 
 def _skeletons_by_frame(payload: dict[str, Any] | None) -> dict[int, list[dict[str, Any]]]:

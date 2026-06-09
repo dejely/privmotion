@@ -26,6 +26,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--visualization-ext", default=".gif", choices=(".gif", "gif", ".mp4", "mp4"))
     parser.add_argument("--fps", type=int, default=4)
     parser.add_argument("--size", default="640x360")
+    parser.add_argument(
+        "--deidentification-profile",
+        default="standard",
+        choices=("standard", "hipaa-expert-aggregate"),
+        help="De-identification profile for per-sample processing.",
+    )
     return parser
 
 
@@ -44,16 +50,19 @@ def main(argv: list[str] | None = None) -> int:
             visualization_ext=args.visualization_ext,
             fps=args.fps,
             size=parse_size(args.size),
+            deidentification_profile=args.deidentification_profile,
         )
     except Exception as exc:
         print(f"privmotion-dataset-eval: {exc}", file=sys.stderr)
         return 2
 
-    print(f"manifest={report.manifest_path}")
-    print(f"output_dir={report.output_dir}")
+    if report.deidentification_profile != "hipaa-expert-aggregate":
+        print(f"manifest={report.manifest_path}")
+        print(f"output_dir={report.output_dir}")
+    print(f"deidentification_profile={report.deidentification_profile}")
     print(f"sample_count={report.sample_count}")
     print(f"processed_frame_count={report.processed_frame_count}")
-    print(f"dataset_report={report.output_dir / 'dataset_report.json'}")
+    print("dataset_report=dataset_report.json" if report.deidentification_profile == "hipaa-expert-aggregate" else f"dataset_report={report.output_dir / 'dataset_report.json'}")
     return 0
 
 
