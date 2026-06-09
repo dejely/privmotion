@@ -19,6 +19,18 @@ By default, `privmotion` follows a `no-raw-rgb` retention model:
 The intended privacy level is **raw visual suppression and retention
 minimization**, not cryptographic anonymity or formal de-identification.
 
+## HIPAA De-identification Scope
+
+HIPAA de-identification under the Privacy Rule requires either Expert
+Determination or Safe Harbor. `privmotion` does not certify either method by
+itself.
+
+The `hipaa-expert-aggregate` profile is an Expert Determination support mode.
+It writes aggregate-only reports and removes person-level motion artifacts from
+the output bundle so a qualified expert can review the data, recipient, context,
+methods, and residual risk. The generated `deidentification_report.json` records
+that expert determination is still required.
+
 ## What Data Enters the System?
 
 The system can receive:
@@ -53,6 +65,10 @@ store:
   and recovery-policy inspection.
 - `retention_report.json`: validation results for the configured retention
   policy.
+- `aggregate_report.json`: run-level aggregate counts and coarse utility
+  summaries when the aggregate mode is selected.
+- `deidentification_report.json`: HIPAA Expert Determination support metadata
+  for `hipaa-expert-aggregate` runs.
 - `benchmark_report.json`: deterministic utility, privacy-proxy, and systems
   metrics.
 - `dataset_report.json`: aggregate metrics for manifest-based dataset
@@ -157,12 +173,19 @@ anonymization.
 Optional encrypted feature controls are available only when explicitly enabled.
 They do not change the default `no-raw-rgb` privacy model.
 
+Encryption and raw-RGB non-retention are not the same as HIPAA
+de-identification. Encrypted records may still be PHI if they identify a person
+after decryption, and derived motion artifacts may still support
+re-identification.
+
 ## Recommended Operating Practices
 
 - Use consented or synthetic input whenever possible.
 - Keep raw input data outside the repository.
 - Store generated motion artifacts with the same care as other sensitive
   derived data.
+- Use `--deidentification-profile hipaa-expert-aggregate --mode aggregate` when
+  preparing an aggregate output bundle for HIPAA Expert Determination review.
 - Prefer aggregate benchmark reports over publishing per-person artifacts.
 - Run `privmotion-validate` before sharing an output directory.
 - Review metadata for paths, labels, timestamps, or IDs that could identify a

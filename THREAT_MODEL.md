@@ -16,6 +16,11 @@ these CLIs. The main security objective is to prevent raw RGB retention by
 default while reducing the risk that generated artifacts, reports, previews, or
 metadata leak identity or local filesystem context.
 
+The `hipaa-expert-aggregate` profile reduces person-level output risk by
+writing aggregate-only reports for Expert Determination review. It is not a
+legal certification path by itself, and the OpenCV-style C++ scaffold remains
+conceptual rather than the HIPAA-oriented runtime.
+
 ## Scope and Assumptions
 
 In scope:
@@ -27,6 +32,7 @@ In scope:
 - Generated JSON, PGM, GIF, and MP4 artifacts.
 - Optional YOLO-Pose backend behavior.
 - Documentation-level privacy and OpenCV scaffold assumptions.
+- HIPAA Expert Determination support behavior in the Python CLI/library path.
 
 Out of scope:
 
@@ -34,6 +40,7 @@ Out of scope:
 - Full OpenCV C++ module compilation or generated Python bindings.
 - External dataset hosting and external identity-scoring model integrations.
 - Legal compliance review.
+- Automatic HIPAA de-identification certification.
 
 Assumptions:
 
@@ -68,7 +75,7 @@ Evidence anchors:
   - `privmotion-process`: reads media or frame directories and writes motion
     artifacts.
   - `privmotion-validate`: scans output directories for raw-RGB retention
-    violations.
+    violations and HIPAA aggregate-profile artifact violations.
   - `privmotion-benchmark`: computes deterministic utility/privacy proxy
     metrics.
   - `privmotion-visualize`: renders GIF/MP4 previews from anonymized outputs.
@@ -76,7 +83,8 @@ Evidence anchors:
     reports.
 - Configuration:
   - `ProcessConfig` validates output modes, retention policy, pose backend, and
-    frame limits.
+    frame limits. It also restricts `hipaa-expert-aggregate` to aggregate-only
+    output mode.
 - Input and decoding:
   - `load_frames`, `load_video_frames`, `read_image`, and
     `read_portable_anymap` read local images, videos, and frame directories.
@@ -266,7 +274,7 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | TM-001 | Malicious media provider | Operator processes untrusted or oversized media. | Provide huge or malformed image/video/frame input that is decoded and held in memory. | Resource exhaustion or decoder-triggered crash; possible dependency-level exploit. | Compute resources, local process, raw frames. | Extension allow-list and skipped unreadable frames in `src/privmotion/io.py`; optional `max_frames` in `ProcessConfig`. | Frames are loaded into a list before processing; dataset eval does not expose `max_frames`; no file size, pixel count, duration, or timeout limits. | Stream frames incrementally; add max bytes, max pixels, max duration, and dataset max-sample limits; expose `--max-frames` in dataset eval; document processing untrusted media in a sandbox. | Log input summary, skipped frames, decode errors, frame count, byte size, processing time, and memory warnings. | medium | high | high |
 | TM-002 | Untrusted model source | Operator enables YOLO or auto downloads/loads model weights. | Supply malicious or compromised model file/name. | Local code execution risk through unsafe model loading or integrity compromise of pose outputs. | Local filesystem, model weights, output integrity. | YOLO is optional and explicit install is documented; `yolo` fails if dependency missing in `src/privmotion/backends.py`. | No allow-list, hash pinning, model provenance check, or warning when model path is local/untrusted. | Add trusted model allow-list and hash verification; warn for local model paths; document only using trusted weights; consider disabling YOLO auto-download in high-assurance mode. | Record model path/hash/source in metadata; alert when unknown model paths are used. | medium | high | high |
-| TM-003 | Output recipient or downstream analyst | Outputs are shared publicly or with broad access. | Re-identify subjects from skeletons, silhouettes, depth surrogates, plaintext features, previews, or metadata. | Privacy harm despite no raw RGB retention. | Skeletons, features, masks, previews, metadata. | README and `PRIVACY_MODEL.md` warn that derived artifacts can leak identity; raw RGB not written in `pipeline.py`; Phase 5 can encrypt feature records only. | No formal privacy metric, differential privacy, complete access control, decrypted recovery workflow, or automatic metadata redaction. | Add metadata redaction options; add artifact sensitivity labels; require explicit acknowledgement before writing previews to `assets/`; provide aggregate-only report mode; keep encrypted features enabled for sensitive feature exports. | Review `retention_report.json`; inspect encrypted-feature policy with `privmotion-recovery-inspect`; scan outputs for paths/labels; add report fields for artifact sensitivity and metadata leakage. | high | high | high |
+| TM-003 | Output recipient or downstream analyst | Outputs are shared publicly or with broad access. | Re-identify subjects from skeletons, silhouettes, depth surrogates, plaintext features, previews, or metadata. | Privacy harm despite no raw RGB retention. | Skeletons, features, masks, previews, metadata. | README and `PRIVACY_MODEL.md` warn that derived artifacts can leak identity; raw RGB not written in `pipeline.py`; Phase 5 can encrypt feature records only; `hipaa-expert-aggregate` writes aggregate-only reports and blocks visualization/benchmark reports. | No formal privacy metric, differential privacy, complete access control, decrypted recovery workflow, or automatic legal certification. | Use `hipaa-expert-aggregate` for Expert Determination support; add artifact sensitivity labels for standard outputs; require explicit acknowledgement before writing previews to `assets/`; keep encrypted features enabled for sensitive feature exports. | Review `retention_report.json`; inspect encrypted-feature policy with `privmotion-recovery-inspect`; scan outputs for paths/labels; verify HIPAA aggregate validation passes before expert review. | high | high | high |
 | TM-004 | Wrapper service or future code change | A wrapper writes raw frames or near-raw frames into output directories. | Store raw RGB with names not caught by validator. | False sense of privacy compliance and raw identity leakage. | Raw RGB frames, output directory, validation reports. | `validate_output_dir` scans raw-like names and disallows raw images outside allowed dirs. | Heuristic name-based validation can miss raw data; allowed image dirs are trusted by name. | Add content-based checks for RGB images; enforce writer registry; keep output schema allow-list; add tests that fail on raw-looking data in unexpected paths. | Include validator version and scanned file counts; add CI tests for retention bypass cases. | medium | high | high |
 | TM-005 | Malicious manifest author | Operator runs dataset eval on attacker-controlled manifest. | Reference many files, sensitive paths, or identifying labels; trigger batch output creation. | DoS, metadata leakage, accidental processing of non-consented data. | Local paths, dataset metadata, generated outputs, compute resources. | Manifest must be JSON object/list; sample ID is sanitized in `dataset_eval.py`. | Input path is resolved relative to manifest and not restricted to a dataset root; no sample count or total frame limits. | Add `--dataset-root` and reject paths outside it; add max samples and max frames; redact absolute paths from reports by default. | Log resolved path roots, sample counts, rejected paths, and per-sample frame counts. | medium | medium | medium |
 | TM-006 | Local user or misleading instructions | Operator chooses unsafe output/report/preview paths. | Write generated files into sensitive or unintended directories. | File overwrite, data exposure, repository pollution, or confusion. | Output files, local filesystem, repo hygiene. | Exporters create parent dirs and write explicit paths; `.gitignore` ignores common generated dirs and weights. | No output root sandbox, symlink handling, overwrite confirmation, or same-path checks. | Refuse output inside source input directories by default; add `--force` for overwrites; warn for paths outside repo or under `assets/`; protect against symlinked outputs if needed. | Emit output path, file count, and overwrite warnings in metadata and CLI logs. | medium | medium | medium |
@@ -345,8 +353,9 @@ flowchart LR
    - Add tests for near-raw preview or image leakage cases.
 
 4. Reduce metadata leakage:
-   - Add an option to redact absolute paths, sample labels, and source names.
-   - Make redaction the default for dataset reports intended for sharing.
+   - Use `hipaa-expert-aggregate` when reports are intended for HIPAA Expert
+     Determination review.
+   - Keep redaction as the default for HIPAA aggregate dataset reports.
 
 5. Add safe output handling:
    - Warn on overwrites.
