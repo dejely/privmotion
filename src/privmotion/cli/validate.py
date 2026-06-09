@@ -19,6 +19,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Retention policy to validate.",
     )
     parser.add_argument("--report", type=Path, default=None, help="Optional JSON report path.")
+    parser.add_argument(
+        "--deidentification-profile",
+        default="standard",
+        choices=("standard", "hipaa-expert-aggregate"),
+        help="Additional de-identification profile validation.",
+    )
     return parser
 
 
@@ -27,7 +33,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        result = validate_output_dir(args.output, policy=args.policy, report_path=args.report)
+        result = validate_output_dir(
+            args.output,
+            policy=args.policy,
+            report_path=args.report,
+            deidentification_profile=args.deidentification_profile,
+        )
     except Exception as exc:
         print(f"privmotion-validate: {exc}", file=sys.stderr)
         return 2
@@ -42,4 +53,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
-

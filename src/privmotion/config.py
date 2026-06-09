@@ -8,8 +8,9 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 
 
-VALID_OUTPUT_MODES = frozenset({"skeleton", "silhouette", "depth-surrogate", "features"})
+VALID_OUTPUT_MODES = frozenset({"skeleton", "silhouette", "depth-surrogate", "features", "aggregate"})
 DEFAULT_OUTPUT_MODES = ("skeleton", "silhouette")
+VALID_DEIDENTIFICATION_PROFILES = frozenset({"standard", "hipaa-expert-aggregate"})
 
 
 def parse_output_modes(value: str | list[str] | tuple[str, ...]) -> tuple[str, ...]:
@@ -45,6 +46,7 @@ class ProcessConfig:
     pose_model: str = "yolo11n-pose.pt"
     tracking_backend: str = "single"
     max_frames: int | None = None
+    deidentification_profile: str = "standard"
     feature_encryption: str = "none"
     access_policy_path: Path | None = None
     audit_actor: str | None = None
@@ -63,6 +65,15 @@ class ProcessConfig:
         object.__setattr__(self, "pose_backend", normalized_pose_backend)
         if self.max_frames is not None and self.max_frames <= 0:
             raise ValueError("max_frames must be positive when provided")
+        normalized_profile = self.deidentification_profile.lower()
+        if normalized_profile not in VALID_DEIDENTIFICATION_PROFILES:
+            valid = ", ".join(sorted(VALID_DEIDENTIFICATION_PROFILES))
+            raise ValueError(f"deidentification_profile must be one of: {valid}")
+        object.__setattr__(self, "deidentification_profile", normalized_profile)
+        if normalized_profile == "hipaa-expert-aggregate" and self.output_modes != ("aggregate",):
+            raise ValueError("hipaa-expert-aggregate requires exactly the aggregate output mode")
+        if normalized_profile == "standard" and "aggregate" in self.output_modes:
+            raise ValueError("aggregate output mode requires deidentification_profile=hipaa-expert-aggregate")
         normalized_feature_encryption = self.feature_encryption.lower()
         if normalized_feature_encryption not in {"none", "fernet"}:
             raise ValueError("feature_encryption must be one of: none, fernet")
@@ -108,7 +119,18 @@ class ProcessConfig:
         except Exception as exc:
             raise ValueError(f"environment variable {self.recovery_key_env} must contain a valid Fernet key") from exc
 
-    def to_json(self) -> dict[str, object]:
+    def to_json(self, redacted: bool = False) -> dict[str, object]:
+        if redacted:
+            return {
+                "output_modes": list(self.output_modes),
+                "retention_policy": self.retention_policy,
+                "segmentation_backend": self.segmentation_backend,
+                "pose_backend": self.pose_backend,
+                "tracking_backend": self.tracking_backend,
+                "max_frames": self.max_frames,
+                "deidentification_profile": self.deidentification_profile,
+                "feature_encryption": self.feature_encryption,
+            }
         return {
             "input_path": str(self.input_path),
             "output_dir": str(self.output_dir),
@@ -119,6 +141,7 @@ class ProcessConfig:
             "pose_model": self.pose_model,
             "tracking_backend": self.tracking_backend,
             "max_frames": self.max_frames,
+            "deidentification_profile": self.deidentification_profile,
             "feature_encryption": self.feature_encryption,
             "access_policy_path": str(self.access_policy_path) if self.access_policy_path is not None else None,
             "audit_actor": self.audit_actor,

@@ -35,6 +35,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tracking-backend", default="single")
     parser.add_argument("--max-frames", type=int, default=None)
     parser.add_argument(
+        "--deidentification-profile",
+        default="standard",
+        choices=("standard", "hipaa-expert-aggregate"),
+        help="De-identification profile. Use hipaa-expert-aggregate with --mode aggregate for expert-review outputs.",
+    )
+    parser.add_argument(
         "--feature-encryption",
         default="none",
         choices=("none", "fernet"),
@@ -66,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
             pose_model=args.pose_model,
             tracking_backend=args.tracking_backend,
             max_frames=args.max_frames,
+            deidentification_profile=args.deidentification_profile,
             feature_encryption=args.feature_encryption,
             access_policy_path=args.access_policy,
             audit_actor=args.audit_actor,
