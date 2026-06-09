@@ -97,6 +97,24 @@ def test_visualize_handles_missing_optional_artifacts(tmp_path) -> None:
     assert gif_path.exists()
 
 
+def test_visualize_fails_for_hipaa_aggregate_output(tmp_path) -> None:
+    input_path = tmp_path / "person.ppm"
+    output_dir = tmp_path / "out"
+    write_ppm(input_path, synthetic_person_image())
+    PrivMotionPipeline(
+        ProcessConfig(
+            input_path=input_path,
+            output_dir=output_dir,
+            output_modes=("aggregate",),
+            pose_backend="prototype",
+            deidentification_profile="hipaa-expert-aggregate",
+        )
+    ).run()
+
+    with pytest.raises(ValueError, match="hipaa-expert-aggregate"):
+        visualize_output_dir(output_dir, tmp_path / "preview.gif")
+
+
 def test_visualize_fails_on_missing_output_dir(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         visualize_output_dir(tmp_path / "missing", tmp_path / "preview.gif")

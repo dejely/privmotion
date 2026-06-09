@@ -7,9 +7,10 @@ from privmotion.config import ProcessConfig, parse_output_modes
 
 
 def test_parse_output_modes_normalizes_and_deduplicates() -> None:
-    assert parse_output_modes("skeleton, depth_surrogate, skeleton") == (
+    assert parse_output_modes("skeleton, depth_surrogate, aggregate, skeleton") == (
         "skeleton",
         "depth-surrogate",
+        "aggregate",
     )
 
 
@@ -52,6 +53,49 @@ def test_process_config_defaults_to_no_feature_encryption(tmp_path) -> None:
 
     assert config.feature_encryption == "none"
     assert config.to_json()["feature_encryption"] == "none"
+    assert config.deidentification_profile == "standard"
+    assert config.to_json()["deidentification_profile"] == "standard"
+
+
+def test_process_config_accepts_hipaa_expert_aggregate_profile(tmp_path) -> None:
+    config = ProcessConfig(
+        input_path=tmp_path / "in.ppm",
+        output_dir=tmp_path / "out",
+        output_modes=("aggregate",),
+        deidentification_profile="hipaa-expert-aggregate",
+    )
+
+    assert config.output_modes == ("aggregate",)
+    assert config.deidentification_profile == "hipaa-expert-aggregate"
+    assert "input_path" not in config.to_json(redacted=True)
+
+
+def test_process_config_rejects_unknown_deidentification_profile(tmp_path) -> None:
+    with pytest.raises(ValueError, match="deidentification_profile"):
+        ProcessConfig(
+            input_path=tmp_path / "in.ppm",
+            output_dir=tmp_path / "out",
+            deidentification_profile="hipaa-ish",
+        )
+
+
+def test_process_config_rejects_person_level_modes_for_hipaa_profile(tmp_path) -> None:
+    with pytest.raises(ValueError, match="aggregate output mode"):
+        ProcessConfig(
+            input_path=tmp_path / "in.ppm",
+            output_dir=tmp_path / "out",
+            output_modes=("skeleton",),
+            deidentification_profile="hipaa-expert-aggregate",
+        )
+
+
+def test_process_config_rejects_aggregate_mode_for_standard_profile(tmp_path) -> None:
+    with pytest.raises(ValueError, match="requires deidentification_profile"):
+        ProcessConfig(
+            input_path=tmp_path / "in.ppm",
+            output_dir=tmp_path / "out",
+            output_modes=("aggregate",),
+        )
 
 
 def test_process_config_rejects_unknown_feature_encryption(tmp_path) -> None:
